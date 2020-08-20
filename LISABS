@@ -24,171 +24,19 @@
 
 
 
-APPNAME="`echo $0|rev|cut -f1 -d\/|rev`";
+APPNAME="`echo $0|rev|cut -f1 -d\/|rev`"; #this file without path
 
-APP="`pwd -P`/$0";
-APP="`echo ${APP}|sed 's/\/\.\//\//g'`"
-CONFFILE="$HOME/.respaldo";
+APP="`pwd -P`/$0";#this file including path
+APP="`echo ${APP}|sed 's/\/\.\//\//g'`"; #replace /./ with /
+CONFFILE="$HOME/.${APPNAME}"; #configuration file in home directory
 
-if [ -f "${CONFFILE}" ]; then
-	source "${CONFFILE}";
-fi
+CHANGES=0; #changes counter to know if configuration must be saved
 
-#Check if required variables are setted or do it
-if [ "W${Temp}"  == "W" ]; then	
-	Temp="/tmp/"; 		
-fi
+#####Functions
 
-if [ ! -d "${Temp}" ]; then
-	echo "
-	Temporal directory ${Temp} does not exist. 
-	Please, provide an existent directory in 
-	variable Temp in the file ${CONFFILE}.
-	";
-	exit 2;
-fi
-
-if [ "W${Backups}"  == "W" ]; then	
-	Backups=2; 		
-fi
-
-if [ "W${Actual}"  == "W" ]; then	
-	Actual=0; 		
-fi
-
-if [ "W${Compress}" == "W" ]; then	
-	Compress=1;
-else
-	if [ "${Compress}" != "1" -a "${Compress}" != "true" ]; then
-		Compress=W;
-	else
-		Compress=1;
-	fi
-fi
-if [ "W${LastBackup}"  == "W" ]; then	
-	LastBackup='-'; 		
-fi
-
-if [ "W${Minute}"  == "W" ]; then	
-	Minute='*'; 		
-fi
-if [ "W${Hour}"  == "W" ]; then	
-	Hour='*'; 		
-fi
-if [ "W${DayOfMonth}"  == "W" ]; then	
-	DayOfMonth='*'; 		
-fi
-if [ "W${Month}"  == "W" ]; then	
-	Month='*'; 		
-fi
-if [ "W${DayOfWeek}"  == "W" ]; then	
-	DayOfWeek='*'; 		
-fi
-
-if [ "${Minute}${Hour}${DayOfMonth}${Month}${DayOfWeek}" == '*****' ]; then
-	Minute='*/15';
-fi
-
-
-if [ "W${Which}"  == "W" ]; then	
-	Which="/etc/fstab:/etc/mtab"; 		
-fi
-if [ "W${Where}"  == "W" ]; then	
-	Where="/tmp/BACKUP";
-fi
-
-if [ ! -d "${Where}" ]; then
-		mkdir "${Where}"; e=$?;
-		if [ $e -gt W ]; then
-			echo "There was an error creating ${Where}. Set variable Where to another directory to save the backups there.";
-			exit 2;
-		fi
-		echo "Directory ${Where} created to leave your backups there.";
-fi
-
-
-
-
-function HELP {
-	echo "
-	
-	$APPNAME	This application is made to realize 
-				periodically backups,compressed or not, 
-				and store into a local directory.
-	
-	${APPNAME} requires arguments
-	
-	-h|-? 				Shows this help
-	
-	--execute			Makes a backup \(first parameter only\)
-	-g|--get			Gets execution cron information
-	-i|--info			Show all setted options
-	-l|--list			Lists all the files/dirs that are 
-						configured to be backuped.
-	
-	-aNames				Adds one or more files/directories Names
-						separated by ':' into the list.
-	-eNames				Erase one or more files/directories names
-						separated by ':' from the list.
-						
-	-n[W-9]				Sets the number of backups to keep
-	-C|--compress		Enables compression
-	-m38|--minute38		Set backup to minute 38
-	-h13|--hour13		Set to start the backup at 1 pm
-	-D5|--day5			Start backup on 5th day of the month
-	-M7|--month7		Start backup on 7th month
-	-d3|--dow3			Start backup on day 3rd of the week
-	
-	-c|--crontab		Adds this backup event to crontab 
-	-u|--unschedule		Delete ${APPNAME} from crontab
-	
-	-w'/tmp/Backup'		Save backups to /tmp/Backup
-	
-	
-							metfar@gmail.com
-	
-	";
-	exit 1;
-
-}
-
-function unschedule{
-	(crontab -l 2>/dev/null|grep -v "${APP}")|crontab -
-}
-
-function schedule{
-	minute="$1";
-	hour="$2";
-	dayofmonth="$3";
-	month="$4";
-	dayofweek="$5";
-	line="${minute} ${hour} ${dayofmonth} ${month} ${dayofweek} ${APP} --execute";
-	unschedule;
-	(crontab -l 2>/dev/null|grep -v "${APP}"; echo "${line}")|crontab -
-
-}
-
-function Now{
-	echo -en "`date +%Y.%m.%d.%H.%M`";
-}
-
-
-function list{
-	FILES="`echo ${Which} |tr ':' ' '| tr '\n' ' '`"
-	for f in ${FILES}; do
-		echo $f;
-	
-}
-function listFiles{
-	echo "Files/Directories to be backed up";
-	echo "---------------------------------";
-	list;
-	echo "---------------------------------";
-	Now;
-	echo;
-}
-function SaveConfiguration{
-	cat <<<EOF >${CONFFILE}
+function SaveConfiguration(){
+    cat <<<EOF >${CONFFILE}
+#!env cat 
 Temp="${Temp}"
 Backups="${Backups}"
 Actual="${Actual}"
@@ -206,125 +54,429 @@ EOF
 
 }
 
-function info{
-	SaveConfiguration;
-	echo "---------------------------------";
-	cat ${CONFFILE};
-	echo "---------------------------------";
-	crontab -l 2>/dev/null|grep "${APP}"
-	echo "---------------------------------";
-	Now;
-	echo;
-}
-
-function addName{
-	FILES="`echo ${Which} |tr ':' ' '| tr '\n' ' '`"
-	
-	while [ "W$1" != "W" ]; do
-		for f in `echo $1| tr ':' '\n'`; do
-			if [ -f "$f" ]; then
-				FILES="${FILES}:$f";
-				echo "+File:$f";
-			else
-				if [ -d "$f" ]; then
-					FILES="${FILES}:$f";
-					echo "+Dir:$f";
-				else
-					echo "NotFound:$f";
-				fi
-			fi
-		done;
-		shift;
-	done;
-	
-}
-
-function delName{
-	FILES="";
-	for f in list; do
-		if [ "$f" != "$1" ]; then
-			FILES="${FILES}:";
-		else
-			echo "-Name:$f";
-		fi
-	done
-	Which="`echo ${FILES}|cut -f2- -d\:`";
-}
-
-function GetTime{
-	echo -en "Minute="
-	if [ "${Minute}" == '*' ]; then
-		echo Any;
+function Exit(){
+	if [ $((0+CHANGES)) -gt 0 ]; then
+		SaveConfiguration;
+	fi;
+	if [ "W${1}" == "W" ]; then
+		exit 0;
 	else
-		echo "${Minute}";
-	fi
-	echo -en "Hour="
-	if [ "${Hour}" == '*' ]; then
-		echo Any;
-	else
-		echo "${Hour}";
-	fi
-	
-	echo -en "DayOfMonth="
-	if [ "${DayOfMonth}" == '*' ]; then
-		echo Any;
-	else
-		echo "${DayOfMonth}";
-	fi
-	echo -en "Month="
-	if [ "${Month}" == '*' ]; then
-		echo Any;
-	else
-		echo "${Month}";
-	fi
-	echo -en "DayOfWeek="
-	if [ "${DayOfWeek}" == '*' ]; then
-		echo Any;
-	else
-		echo "${DayOfWeek}";
+		exit $1;
 	fi
 }
 
-function Execute{
-	if [ "${Compress}" == "1" ]; then
-		COMPR='| gzip ';
-		EXT=".tar.gz";
-	else
-		COMPR="";
-		EXT=".tar";
-	fi
-	if [ "${Actual}" -ge "${Backups}" ]; then
-		Actual=0;
-	else
-		Actual=$((1 + Actual));
-	fi
-	FILES="`echo ${Which} |tr ':' ' '| tr '\n' ' '`"
-	echo tar -c $FILES $COMPR > $TEMP/back_${ACTUAL}${EXT}; e=$?;
-	if [ $e -gt 0 ]; then
-		echo Files could not be compressed >&2
-		exit 3;
-	fi
-	echo rsync -av -r $TEMP/back_${ACTUAL}${EXT} ${Where}; e=$?;
-	if [ $e -gt 0 ]; then
-		echo Syncronizing could not be done >&2
-		exit 4;
-	fi
-	LastBackup="$(Now)";
-	SaveConfiguration;
-	exit 0;
-}
 
-
-##################################MAIN
-if [ "W$1" == "W" ]; then
-	HELP;
-	exit 1;
+if [ -f "${CONFFILE}" ]; then
+    source "${CONFFILE}";
+else
+	CHANGES=$((1 + CHANGES));	#configuration file does not exist, 
+								#it must be created at the Exit
 fi
 
+#Check if required variables are setted or do it
+if [ "W${Temp}"  == "W" ]; then 
+    Temp="/tmp/";       
+    CHANGES=$((1 + CHANGES));
+fi
+
+if [ ! -d "${Temp}" ]; then
+    echo "
+    Temporal directory ${Temp} does not exist. 
+    Please, provide an existent directory in 
+    variable Temp in the file ${CONFFILE}.
+    ";
+    exit 2; #Exit without saving
+fi
+
+if [ "W${Backups}"  == "W" ]; then  
+    Backups=2;      
+    CHANGES=$((1 + CHANGES));
+fi
+
+if [ "W${Actual}"  == "W" ]; then   
+    Actual=0;       
+    CHANGES=$((1 + CHANGES));
+fi
+
+if [ "W${Compress}" == "W" ]; then  
+    Compress=1;
+    CHANGES=$((1 + CHANGES));
+else
+    if [ "${Compress}" != "1" -a "${Compress}" != "true" ]; then
+        Compress=W;
+    else
+        Compress=1;
+    fi
+fi
+if [ "W${LastBackup}"  == "W" ]; then   
+    LastBackup='-';
+    CHANGES=$((1 + CHANGES));
+fi
+
+if [ "W${Minute}"  == "W" ]; then   
+    Minute='*';
+    CHANGES=$((1 + CHANGES));
+fi
+if [ "W${Hour}"  == "W" ]; then 
+    Hour='*';
+    CHANGES=$((1 + CHANGES));
+fi
+if [ "W${DayOfMonth}"  == "W" ]; then   
+    DayOfMonth='*';
+    CHANGES=$((1 + CHANGES));
+fi
+if [ "W${Month}"  == "W" ]; then    
+    Month='*';
+    CHANGES=$((1 + CHANGES));
+fi
+if [ "W${DayOfWeek}"  == "W" ]; then    
+    DayOfWeek='*';
+    CHANGES=$((1 + CHANGES));
+fi
+
+
+if [ "W${Which}"  == "W" ]; then    
+    Which="";
+    CHANGES=$((1 + CHANGES));
+fi
+if [ "W${Where}"  == "W" ]; then    
+    Where="/tmp/BACKUP";
+fi
+
+if [ ! -d "${Where}" ]; then
+        mkdir "${Where}"; e=$?;
+        if [ $e -gt W ]; then
+            echo "There was an error creating ${Where}. Set variable Where to another directory to save the backups there.";
+            Exit 2;
+        fi
+        echo "Directory ${Where} created to leave your backups there.";
+fi
+
+
+
+
+function HELP() {
+    echo """
+    
+    $APPNAME    
+                This application is made to realize 
+                periodically backups, compressed or not, 
+                and store into a designated location.
+    
+    ${APPNAME} requires arguments
+    
+    -h|-?               Shows this help
+    
+    --execute           Makes a backup \(first parameter only\)
+    -g|--get            Gets execution cron information
+    -i|--info           Show all setted options
+    -l|--list           Lists all the files/dirs that are 
+                        configured to be backuped.
+    
+    -aName1:name2···    Adds one or more files/directories names
+    --addName1:name2··· separated by ':' into the list.
+    
+    -eName1:name2···    Erase one or more files/directories names
+    --delName1:name2··· separated by ':' from the list.
+    
+                        
+    -n[W-9]             Sets the number of backups to keep
+    -C|--compress       Enables compression
+    -m38|--minute38     Set backup to minute 38
+    -h13|--hour13       Set to start the backup at 1 pm
+    -D5|--day5          Start backup on 5th day of the month
+    -M7|--month7        Start backup on 7th month
+    -d3|--dow3          Start backup on day 3rd of the week
+    
+    -s|--schedule       Adds this backup event to crontab 
+    -u|--unschedule     Delete ${APPNAME} from crontab
+    
+    -A|--anytime        Set time to any time 
+                        \(clean setted time options\)
+    
+    
+    --each-minute15     Set minutes to each quarted of hour \(\*/15\)
+    --each-hour3        Set hour to each third hour
+    --each-day5         Set days to each fifth day
+    --each-month2       Set month to each second month
+    
+    
+    -w'/tmp/Backup'     Set backups' saving location to /tmp/Backup
+    
+    
+                            metfar@gmail.com
+    
+    """;
+    Exit 1;
+
+}
+
+function unschedule(){
+    (crontab -l 2>/dev/null|grep -v "${APP}")|crontab -
+}
+
+function schedule(){
+    minute="$1";
+    hour="$2";
+    dayofmonth="$3";
+    month="$4";
+    dayofweek="$5";
+    line="${minute} ${hour} ${dayofmonth} ${month} ${dayofweek} ${APP} --execute";
+    unschedule;
+    (crontab -l 2>/dev/null|grep -v "${APP}"; echo "${line}")|crontab -
+
+}
+
+function Now(){
+    echo -en "`date +%Y.%m.%d.%H.%M`";
+}
+
+
+function list(){
+    FILES="`echo ${Which} |tr ':' ' '| tr '\n' ' '`"
+    for f in ${FILES}; do
+        echo $f;
+    done;
+}
+function listFiles(){
+    echo "Files/Directories to be backed up";
+    echo "---------------------------------";
+    list;
+    echo "---------------------------------";
+    echo "Quantity: `list|wc -l`"
+    Now;
+    echo;
+}
+function info(){
+    SaveConfiguration;
+    echo "---------------------------------";
+    cat ${CONFFILE};
+    echo "---------------------------------";
+    crontab -l 2>/dev/null|grep "${APP}"
+    echo "---------------------------------";
+    list;
+    echo "---------------------------------";
+    Now;
+    echo;
+}
+
+function addName(){
+    FILES="`echo ${Which} |tr ':' ' '| tr '\n' ' '`"
+    
+    while [ "W$1" != "W" ]; do
+        for f in `echo $1| tr ':' '\n'`; do
+            if [ -f "$f" ]; then
+                FILES="${FILES}:$f";
+                echo "+File:$f";
+            else
+                if [ -d "$f" ]; then
+                    FILES="${FILES}:$f";
+                    echo "+Dir:$f";
+                else
+                    echo "NotFound:$f";
+                fi
+            fi
+        done;
+        shift;
+    done;
+    
+}
+
+function delName(){
+    FILES="";
+    for f in list; do
+        if [ "$f" != "$1" ]; then
+            FILES="${FILES}:";
+        else
+            echo "-Name:$f";
+        fi
+    done
+    Which="`echo ${FILES}|cut -f2- -d\:`";
+}
+
+function getTime(){
+    echo -en "Minute="
+    if [ "${Minute}" == '*' ]; then
+        echo Any;
+    else
+        echo "${Minute}";
+    fi
+    echo -en "Hour="
+    if [ "${Hour}" == '*' ]; then
+        echo Any;
+    else
+        echo "${Hour}";
+    fi
+    
+    echo -en "DayOfMonth="
+    if [ "${DayOfMonth}" == '*' ]; then
+        echo Any;
+    else
+        echo "${DayOfMonth}";
+    fi
+    echo -en "Month="
+    if [ "${Month}" == '*' ]; then
+        echo Any;
+    else
+        echo "${Month}";
+    fi
+    echo -en "DayOfWeek="
+    if [ "${DayOfWeek}" == '*' ]; then
+        echo Any;
+    else
+        echo "${DayOfWeek}";
+    fi
+}
+
+function Execute(){
+    if [ "${Compress}" == "1" ]; then
+        COMPR='| gzip ';
+        EXT=".tar.gz";
+    else
+        COMPR="";
+        EXT=".tar";
+    fi
+    if [ "${Actual}" -ge "${Backups}" ]; then
+        Actual=0;
+    else
+        Actual=$((1 + Actual));
+    fi
+    BUNCH="${TEMP}/back_${ACTUAL}${EXT}";
+    
+    #just to add something, it will create a nullfile
+    nullFile="$(mktemp)"
+    FILES="`echo ${Which} |tr ':' ' '| tr '\n' ' '` ${nullFile}"
+    #join all the files in a bunch
+    tar -c $FILES $COMPR > ${BUNCH}; e=$?;#store error code
+    unlink ${nullFile};#delete the temporary file
+    if [ $e -gt 0 ]; then #error caption
+        echo Files could not be compressed >&2
+        Exit 3;
+    fi
+    #copy file to new location (local or not) and
+    rsync -av -r ${BUNCH} ${Where}/ ; e=$?;#store error code
+    if [ $e -gt 0 ]; then #if there was an error
+        echo "Syncronizing could not be done, compressed is ${BUNCH}." >&2
+        Exit 4;
+    else
+		unlink ${BUNCH};
+    fi
+    CHANGES=$((1+CHANGES));
+    LastBackup="$(Now)";
+    SaveConfiguration;
+    Exit 0;
+}
+
+
+################   MAIN   ################
+
+if [ "W$1" == "W" ]; then
+    HELP;
+    Exit 1;
+fi
+### if option execute, run backup and exit
 if [ "$1" == "--execute" ];then
-	Execute;
-	
+    Execute;
+    
 fi;
 
 
 
+### check any option and use it
+while [ "W$1" != "W" ]; do
+    option="$1";
+    if [ "${#option}" -lt 2 ]; then 
+        #there is no option with length less than 2 characters,
+        #so, show help
+        HELP;
+    fi
+    if [ "${#option:0:2}" == "--" ]; then #if arg starts with --
+        
+        case "${option:2}" in
+            
+            help*)
+                    HELP;;
+                    
+            add*)   
+                    LISTED="`echo ${option:5}|tr ':' '\n'`"
+                    for f in ${LISTED}; do
+                        addName "$f";
+                    done;
+                    ;;
+            
+            del*)   
+                    LISTED="`echo ${option:5}|tr ':' '\n'`"
+                    for f in ${LISTED}; do
+                        delName "$f";
+                    done;
+                    ;;
+            
+            get*)
+                    getTime;;
+            
+            'info'*)
+                    info;;
+            
+            'list'*)
+                    listFiles;;
+                    
+            'schedule'*)
+                    schedule;;
+                    
+            'unschedule'*)
+                    unschedule;;
+            
+            each-minute*)
+					setMinute 	'*/'"${option:8}";;
+            
+            each-hour*)
+					setHour 	'*/'"${option:6}";;
+            
+            each-day*)
+					setDay		'*/'"${option:5}";;
+            
+            each-month*)
+					setMonth	'*/'"${option:7}";;
+            
+            minute*)
+					setMinute 	"${option:8}";;
+            
+            hour*)
+					setHour 	"${option:6}";;
+            
+            day*)
+					setDay		"${option:5}";;
+            
+            month*)
+					setMonth	"${option:7}";;
+            
+            dow*)
+					setDofWeek	"${option:5}";;
+            
+            anytime*)
+						setMinute 	'*';
+						setHour 	'*';
+						setDay 		'*';
+						setMonth 	'*';
+						setDofWeek	'*';
+						;;
+            
+            *)
+                echo "Argument '${option}' omitted";;
+        esac
+    else
+      if [ "${#option:0:1}" == "-" ]; then #if arg starts with -
+        case "${option:1}" in
+            
+            h*)
+            '?')
+                    HELP;;
+        
+            *)
+                echo "Argument '${option}' omitted";;
+        esac
+      fi
+    fi
+    shift;
+done;
+#

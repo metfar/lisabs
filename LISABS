@@ -35,8 +35,10 @@ CHANGES=0; #changes counter to know if configuration must be saved
 #####Functions
 
 function SaveConfiguration(){
-    cat <<<EOF >${CONFFILE}
-#!env cat 
+    Where="${Where}/";#adds a final slash
+    Where="`echo -en ${Where}|sed 's/\/\//\/'`"; #Eliminate //
+    cat <<EOF >${CONFFILE}
+#!/bin/cat 
 Temp="${Temp}"
 Backups="${Backups}"
 Actual="${Actual}"
@@ -51,26 +53,51 @@ Minute="${Minute}"
 Which="${Which}"
 Where="${Where}"
 EOF
-
+CHANGES=0;
 }
 
 function Exit(){
-	if [ $((0+CHANGES)) -gt 0 ]; then
-		SaveConfiguration;
-	fi;
-	if [ "W${1}" == "W" ]; then
-		exit 0;
-	else
-		exit $1;
-	fi
+    if [ $((0+CHANGES)) -gt 0 ]; then
+        SaveConfiguration;
+    fi;
+    if [ "W${1}" == "W" ]; then
+        exit 0;
+    else
+        exit $1;
+    fi
 }
 
+function setMinute(){
+    Minute="$1";
+    CHANGES=$((1 + CHANGES));
+}
+function setHour(){
+    Hour="$1";
+    CHANGES=$((1 + CHANGES));
+}
+function setDay(){
+    DayOfMonth="$1";
+    CHANGES=$((1 + CHANGES));
+}
+
+function setMonth(){
+    Month="$1";
+    CHANGES=$((1 + CHANGES));
+}
+function setDofWeek(){
+    DayOfWeek="$1";
+    CHANGES=$((1 + CHANGES));
+}
+function setNumber(){
+    Backups="$1";
+    CHANGES=$((1 + CHANGES));
+}
 
 if [ -f "${CONFFILE}" ]; then
     source "${CONFFILE}";
 else
-	CHANGES=$((1 + CHANGES));	#configuration file does not exist, 
-								#it must be created at the Exit
+    CHANGES=$((1 + CHANGES));   #configuration file does not exist, 
+                                #it must be created at the Exit
 fi
 
 #Check if required variables are setted or do it
@@ -140,7 +167,9 @@ if [ "W${Which}"  == "W" ]; then
     CHANGES=$((1 + CHANGES));
 fi
 if [ "W${Where}"  == "W" ]; then    
-    Where="/tmp/BACKUP";
+    Where="${Temp}BACKUP";
+    CHANGES=$((1 + CHANGES));
+
 fi
 
 if [ ! -d "${Where}" ]; then
@@ -180,7 +209,8 @@ function HELP() {
     --delName1:name2··· separated by ':' from the list.
     
                         
-    -n[W-9]             Sets the number of backups to keep
+    -n[0-9]             Sets the number of backups to keep 
+						\(2 implies {0,1,2} backups\)
     -C|--compress       Enables compression
     -m38|--minute38     Set backup to minute 38
     -h13|--hour13       Set to start the backup at 1 pm
@@ -221,9 +251,17 @@ function schedule(){
     dayofmonth="$3";
     month="$4";
     dayofweek="$5";
-    line="${minute} ${hour} ${dayofmonth} ${month} ${dayofweek} ${APP} --execute";
+    line="${Minute} ${Hour} ${DayOfMonth} ${Month} ${DayOfWeek} ${APP} --execute";
     unschedule;
-    (crontab -l 2>/dev/null|grep -v "${APP}"; echo "${line}")|crontab -
+    tmp="`mktemp`";
+    crontab -l 2>/dev/null|grep -v "${APP}" > ${tmp}
+    echo "${line}">> ${tmp}
+    cat ${tmp}|crontab - 2>/dev/null
+    if [ $? -gt 0 ]; then
+        cat ${tmp};
+        echo "There was an error. Sorry!";
+        Exit 7;
+    fi;
 
 }
 
@@ -233,7 +271,7 @@ function Now(){
 
 
 function list(){
-    FILES="`echo ${Which} |tr ':' ' '| tr '\n' ' '`"
+    FILES="`echo -en ${Which} |tr ':' ' '| tr '\n' ' '`"
     for f in ${FILES}; do
         echo $f;
     done;
@@ -261,7 +299,7 @@ function info(){
 }
 
 function addName(){
-    FILES="`echo ${Which} |tr ':' ' '| tr '\n' ' '`"
+    FILES="`echo -en ${Which} |tr ':' ' '| tr '\n' ' '`"
     
     while [ "W$1" != "W" ]; do
         for f in `echo $1| tr ':' '\n'`; do
@@ -279,7 +317,7 @@ function addName(){
         done;
         shift;
     done;
-    
+    Which="${FILES}";
 }
 
 function delName(){
@@ -330,7 +368,7 @@ function getTime(){
 
 function Execute(){
     if [ "${Compress}" == "1" ]; then
-        COMPR='| gzip ';
+        COMPR="| gzip ";
         EXT=".tar.gz";
     else
         COMPR="";
@@ -341,25 +379,26 @@ function Execute(){
     else
         Actual=$((1 + Actual));
     fi
-    BUNCH="${TEMP}/back_${ACTUAL}${EXT}";
+    BUNCH="${Temp}back_${Actual}${EXT}";
     
     #just to add something, it will create a nullfile
     nullFile="$(mktemp)"
     FILES="`echo ${Which} |tr ':' ' '| tr '\n' ' '` ${nullFile}"
     #join all the files in a bunch
-    tar -c $FILES $COMPR > ${BUNCH}; e=$?;#store error code
+    #the echo is because I had troubles concatenating compression directly
+    echo "tar -c $FILES $COMPR > ${BUNCH} ;"|sh 2>/dev/null; e=$?;
     unlink ${nullFile};#delete the temporary file
     if [ $e -gt 0 ]; then #error caption
-        echo Files could not be compressed >&2
+        echo "Error: Files could not be compressed" >&2
         Exit 3;
     fi
-    #copy file to new location (local or not) and
-    rsync -av -r ${BUNCH} ${Where}/ ; e=$?;#store error code
+    #copy file to new location (local but can be changed to remote) and
+    rsync -av -r ${BUNCH} ${Where} 2>/dev/null; e=$?;#store error code
     if [ $e -gt 0 ]; then #if there was an error
-        echo "Syncronizing could not be done, compressed is ${BUNCH}." >&2
+        echo "Error: Syncronizing could not be done, compressed is ${BUNCH}." >&2
         Exit 4;
     else
-		unlink ${BUNCH};
+        unlink ${BUNCH};
     fi
     CHANGES=$((1+CHANGES));
     LastBackup="$(Now)";
@@ -390,7 +429,7 @@ while [ "W$1" != "W" ]; do
         #so, show help
         HELP;
     fi
-    if [ "${#option:0:2}" == "--" ]; then #if arg starts with --
+    if [ "${option:0:2}" == "--" ]; then #if arg starts with --
         
         case "${option:2}" in
             
@@ -402,6 +441,7 @@ while [ "W$1" != "W" ]; do
                     for f in ${LISTED}; do
                         addName "$f";
                     done;
+                    SaveConfiguration;
                     ;;
             
             del*)   
@@ -427,51 +467,131 @@ while [ "W$1" != "W" ]; do
                     unschedule;;
             
             each-minute*)
-					setMinute 	'*/'"${option:8}";;
+                    setMinute   '*/'"${option:13}";
+                    SaveConfiguration;;
             
             each-hour*)
-					setHour 	'*/'"${option:6}";;
+                    setHour     '*/'"${option:11}";
+                    SaveConfiguration;;
             
             each-day*)
-					setDay		'*/'"${option:5}";;
+                    setDay      '*/'"${option:10}";
+                    SaveConfiguration;;
             
             each-month*)
-					setMonth	'*/'"${option:7}";;
+                    setMonth    '*/'"${option:12}";
+                    SaveConfiguration;;
             
             minute*)
-					setMinute 	"${option:8}";;
+                    setMinute   "${option:8}";
+                    SaveConfiguration;;
             
             hour*)
-					setHour 	"${option:6}";;
+                    setHour     "${option:6}";
+                    SaveConfiguration;;
             
             day*)
-					setDay		"${option:5}";;
+                    setDay      "${option:5}";
+                    SaveConfiguration;;
             
             month*)
-					setMonth	"${option:7}";;
+                    setMonth    "${option:7}";
+                    SaveConfiguration;;
             
             dow*)
-					setDofWeek	"${option:5}";;
+                    setDofWeek  "${option:5}";
+                    SaveConfiguration;;
             
             anytime*)
-						setMinute 	'*';
-						setHour 	'*';
-						setDay 		'*';
-						setMonth 	'*';
-						setDofWeek	'*';
-						;;
+                        setMinute   '*';
+                        setHour     '*';
+                        setDay      '*';
+                        setMonth    '*';
+                        setDofWeek  '*';
+                        SaveConfiguration;
+                        ;;
+            
+            
             
             *)
                 echo "Argument '${option}' omitted";;
         esac
     else
-      if [ "${#option:0:1}" == "-" ]; then #if arg starts with -
+      if [ "${option:0:1}" == "-" ]; then #if arg starts with -
         case "${option:1}" in
             
-            h*)
-            '?')
-                    HELP;;
+            h*)     HELP;;
+            '?')    HELP;;
         
+            w*)     #this is a directory, so, set, else, error
+                    if [ -d ${option:2} ]; then
+                        Where=${option:2};
+                        SaveConfiguration;
+                    else
+                        echo "Error: ${option:2} is not an existing directory" >&2;
+                        Exit 5;
+                    fi;;
+                    
+            a*)     #add
+                    LISTED="`echo ${option:2}|tr ':' '\n'`"
+                    for f in ${LISTED}; do
+                        addName "$f";
+                    done;
+                    ;;
+            
+            e*)     #erase
+                    LISTED="`echo ${option:2}|tr ':' '\n'`"
+                    for f in ${LISTED}; do
+                        delName "$f";
+                    done;
+                    ;;
+            
+            g*)     #get
+                    getTime;;
+            
+            i*)		#info
+                    info;;
+            
+            l*)		#list
+                    listFiles;;
+                    
+            s*)		#schedule
+                    schedule;;
+                    
+            u*)		#unschedule
+                    unschedule;;
+            
+            m*)		#min
+                    setMinute   "${option:2}";
+                    SaveConfiguration;;
+            
+            h*)		#hour
+                    setHour     "${option:2}";
+                    SaveConfiguration;;
+            
+            D*)		#Day
+                    setDay      "${option:2}";
+                    SaveConfiguration;;
+            
+            M*)		#Month
+                    setMonth    "${option:2}";
+                    SaveConfiguration;;
+            
+            d*)		#dow
+                    setDofWeek  "${option:2}";
+                    SaveConfiguration;;
+            n*)		#number of backups
+                    setBackups  "${option:2}";
+                    SaveConfiguration;;
+            
+            A*)
+                        setMinute   '*';
+                        setHour     '*';
+                        setDay      '*';
+                        setMonth    '*';
+                        setDofWeek  '*';
+                        SaveConfiguration;
+                        ;;
             *)
                 echo "Argument '${option}' omitted";;
         esac

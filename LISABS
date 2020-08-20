@@ -1,0 +1,330 @@
+#!/bin/bash
+# -*- coding: utf-8 -*-
+#
+#  LISABS - LIghtweight Scheduling And Backup System  
+#  
+#  Copyright 2020 William Martinez Bas <metfar@gmail.com>
+#  
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#  
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#  
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+#  MA 02110-1301, USA.
+
+#  Proposal: Make a local backup scheme using rsync. You can try to compress it and schedule it using crontab. 
+
+
+
+APPNAME="`echo $0|rev|cut -f1 -d\/|rev`";
+
+APP="`pwd -P`/$0";
+APP="`echo ${APP}|sed 's/\/\.\//\//g'`"
+CONFFILE="$HOME/.respaldo";
+
+if [ -f "${CONFFILE}" ]; then
+	source "${CONFFILE}";
+fi
+
+#Check if required variables are setted or do it
+if [ "W${Temp}"  == "W" ]; then	
+	Temp="/tmp/"; 		
+fi
+
+if [ ! -d "${Temp}" ]; then
+	echo "
+	Temporal directory ${Temp} does not exist. 
+	Please, provide an existent directory in 
+	variable Temp in the file ${CONFFILE}.
+	";
+	exit 2;
+fi
+
+if [ "W${Backups}"  == "W" ]; then	
+	Backups=2; 		
+fi
+
+if [ "W${Actual}"  == "W" ]; then	
+	Actual=0; 		
+fi
+
+if [ "W${Compress}" == "W" ]; then	
+	Compress=1;
+else
+	if [ "${Compress}" != "1" -a "${Compress}" != "true" ]; then
+		Compress=W;
+	else
+		Compress=1;
+	fi
+fi
+if [ "W${LastBackup}"  == "W" ]; then	
+	LastBackup='-'; 		
+fi
+
+if [ "W${Minute}"  == "W" ]; then	
+	Minute='*'; 		
+fi
+if [ "W${Hour}"  == "W" ]; then	
+	Hour='*'; 		
+fi
+if [ "W${DayOfMonth}"  == "W" ]; then	
+	DayOfMonth='*'; 		
+fi
+if [ "W${Month}"  == "W" ]; then	
+	Month='*'; 		
+fi
+if [ "W${DayOfWeek}"  == "W" ]; then	
+	DayOfWeek='*'; 		
+fi
+
+if [ "${Minute}${Hour}${DayOfMonth}${Month}${DayOfWeek}" == '*****' ]; then
+	Minute='*/15';
+fi
+
+
+if [ "W${Which}"  == "W" ]; then	
+	Which="/etc/fstab:/etc/mtab"; 		
+fi
+if [ "W${Where}"  == "W" ]; then	
+	Where="/tmp/BACKUP";
+fi
+
+if [ ! -d "${Where}" ]; then
+		mkdir "${Where}"; e=$?;
+		if [ $e -gt W ]; then
+			echo "There was an error creating ${Where}. Set variable Where to another directory to save the backups there.";
+			exit 2;
+		fi
+		echo "Directory ${Where} created to leave your backups there.";
+fi
+
+
+
+
+function HELP {
+	echo "
+	
+	$APPNAME	This application is made to realize 
+				periodically backups,compressed or not, 
+				and store into a local directory.
+	
+	${APPNAME} requires arguments
+	
+	-h|-? 				Shows this help
+	
+	--execute			Makes a backup \(first parameter only\)
+	-g|--get			Gets execution cron information
+	-i|--info			Show all setted options
+	-l|--list			Lists all the files/dirs that are 
+						configured to be backuped.
+	
+	-aNames				Adds one or more files/directories Names
+						separated by ':' into the list.
+	-eNames				Erase one or more files/directories names
+						separated by ':' from the list.
+						
+	-n[W-9]				Sets the number of backups to keep
+	-C|--compress		Enables compression
+	-m38|--minute38		Set backup to minute 38
+	-h13|--hour13		Set to start the backup at 1 pm
+	-D5|--day5			Start backup on 5th day of the month
+	-M7|--month7		Start backup on 7th month
+	-d3|--dow3			Start backup on day 3rd of the week
+	
+	-c|--crontab		Adds this backup event to crontab 
+	-u|--unschedule		Delete ${APPNAME} from crontab
+	
+	-w'/tmp/Backup'		Save backups to /tmp/Backup
+	
+	
+							metfar@gmail.com
+	
+	";
+	exit 1;
+
+}
+
+function unschedule{
+	(crontab -l 2>/dev/null|grep -v "${APP}")|crontab -
+}
+
+function schedule{
+	minute="$1";
+	hour="$2";
+	dayofmonth="$3";
+	month="$4";
+	dayofweek="$5";
+	line="${minute} ${hour} ${dayofmonth} ${month} ${dayofweek} ${APP} --execute";
+	unschedule;
+	(crontab -l 2>/dev/null|grep -v "${APP}"; echo "${line}")|crontab -
+
+}
+
+function Now{
+	echo -en "`date +%Y.%m.%d.%H.%M`";
+}
+
+
+function list{
+	FILES="`echo ${Which} |tr ':' ' '| tr '\n' ' '`"
+	for f in ${FILES}; do
+		echo $f;
+	
+}
+function listFiles{
+	echo "Files/Directories to be backed up";
+	echo "---------------------------------";
+	list;
+	echo "---------------------------------";
+	Now;
+	echo;
+}
+function SaveConfiguration{
+	cat <<<EOF >${CONFFILE}
+Temp="${Temp}"
+Backups="${Backups}"
+Actual="${Actual}"
+Compress="${Compress}"
+LastBackup="${LastBackup}"
+Minute="${Minute}"
+Hour="${Hour}"
+DayOfMonth="${DayOfMonth}"
+Month="${Month}"
+DayOfWeek="${DayOfWeek}"
+Minute="${Minute}"
+Which="${Which}"
+Where="${Where}"
+EOF
+
+}
+
+function info{
+	SaveConfiguration;
+	echo "---------------------------------";
+	cat ${CONFFILE};
+	echo "---------------------------------";
+	crontab -l 2>/dev/null|grep "${APP}"
+	echo "---------------------------------";
+	Now;
+	echo;
+}
+
+function addName{
+	FILES="`echo ${Which} |tr ':' ' '| tr '\n' ' '`"
+	
+	while [ "W$1" != "W" ]; do
+		for f in `echo $1| tr ':' '\n'`; do
+			if [ -f "$f" ]; then
+				FILES="${FILES}:$f";
+				echo "+File:$f";
+			else
+				if [ -d "$f" ]; then
+					FILES="${FILES}:$f";
+					echo "+Dir:$f";
+				else
+					echo "NotFound:$f";
+				fi
+			fi
+		done;
+		shift;
+	done;
+	
+}
+
+function delName{
+	FILES="";
+	for f in list; do
+		if [ "$f" != "$1" ]; then
+			FILES="${FILES}:";
+		else
+			echo "-Name:$f";
+		fi
+	done
+	Which="`echo ${FILES}|cut -f2- -d\:`";
+}
+
+function GetTime{
+	echo -en "Minute="
+	if [ "${Minute}" == '*' ]; then
+		echo Any;
+	else
+		echo "${Minute}";
+	fi
+	echo -en "Hour="
+	if [ "${Hour}" == '*' ]; then
+		echo Any;
+	else
+		echo "${Hour}";
+	fi
+	
+	echo -en "DayOfMonth="
+	if [ "${DayOfMonth}" == '*' ]; then
+		echo Any;
+	else
+		echo "${DayOfMonth}";
+	fi
+	echo -en "Month="
+	if [ "${Month}" == '*' ]; then
+		echo Any;
+	else
+		echo "${Month}";
+	fi
+	echo -en "DayOfWeek="
+	if [ "${DayOfWeek}" == '*' ]; then
+		echo Any;
+	else
+		echo "${DayOfWeek}";
+	fi
+}
+
+function Execute{
+	if [ "${Compress}" == "1" ]; then
+		COMPR='| gzip ';
+		EXT=".tar.gz";
+	else
+		COMPR="";
+		EXT=".tar";
+	fi
+	if [ "${Actual}" -ge "${Backups}" ]; then
+		Actual=0;
+	else
+		Actual=$((1 + Actual));
+	fi
+	FILES="`echo ${Which} |tr ':' ' '| tr '\n' ' '`"
+	echo tar -c $FILES $COMPR > $TEMP/back_${ACTUAL}${EXT}; e=$?;
+	if [ $e -gt 0 ]; then
+		echo Files could not be compressed >&2
+		exit 3;
+	fi
+	echo rsync -av -r $TEMP/back_${ACTUAL}${EXT} ${Where}; e=$?;
+	if [ $e -gt 0 ]; then
+		echo Syncronizing could not be done >&2
+		exit 4;
+	fi
+	LastBackup="$(Now)";
+	SaveConfiguration;
+	exit 0;
+}
+
+
+##################################MAIN
+if [ "W$1" == "W" ]; then
+	HELP;
+	exit 1;
+fi
+
+if [ "$1" == "--execute" ];then
+	Execute;
+	
+fi;
+
+
+

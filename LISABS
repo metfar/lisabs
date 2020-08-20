@@ -49,7 +49,6 @@ Hour="${Hour}"
 DayOfMonth="${DayOfMonth}"
 Month="${Month}"
 DayOfWeek="${DayOfWeek}"
-Minute="${Minute}"
 Which="${Which}"
 Where="${Where}"
 EOF

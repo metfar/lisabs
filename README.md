@@ -1,6 +1,6 @@
-# lisabs
+# Application
 
-LISABS - LIghtweight Scheduling And Backup System
+    LISABS - LIghtweight Scheduling And Backup System
 
                 This application is made to realize 
                 periodically backups, compressed or not, 
@@ -53,6 +53,7 @@ LISABS - LIghtweight Scheduling And Backup System
 
 
 #License
+##
   Copyright 2020 William Martinez Bas <metfar@gmail.com>
 
   This program is free software; you can redistribute it and/or modify

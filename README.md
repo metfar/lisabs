@@ -25,7 +25,19 @@ LISABS - LIghtweight Scheduling And Backup System
 
 ## The configuration file will have the same name as the script.
 
-exampleUserConfiguration [exampleUserConfiguration]
+#!/bin/cat 
+Temp="/tmp/"  #temporal directory
+Backups="2"   #copies to keep - 1
+Actual="2"    #last copy number
+Compress="1"  #1=Yes=True   0=False
+LastBackup="2020.08.20.08.58" #Last dateTime in format YYYY.MM.DD.HH.mm
+Minute="*/5"  #each 5 minuts
+Hour="*"    #any hour
+DayOfMonth="*" #any day
+Month="*" #any month
+DayOfWeek="*" #any week
+Which=" /etc/fstab:/home/thisUser/.LISABS" #files to store
+Where="/tmp/SaveBackupsHere/" #where to save the backups
 
 
 # Regards

@@ -195,7 +195,7 @@ function HELP() {
     
     -h|-?               Shows this help
     
-    --execute           Makes a backup \(first parameter only\)
+    --execute           Makes a backup (first parameter only)
     -g|--get            Gets execution cron information
     -i|--info           Show all setted options
     -l|--list           Lists all the files/dirs that are 
@@ -209,7 +209,7 @@ function HELP() {
     
                         
     -n[0-9]             Sets the number of backups to keep 
-						\(2 implies {0,1,2} backups\)
+						(2 implies {0,1,2} backups)
     -C|--compress       Enables compression
     -m38|--minute38     Set backup to minute 38
     -h13|--hour13       Set to start the backup at 1 pm
@@ -221,10 +221,10 @@ function HELP() {
     -u|--unschedule     Delete ${APPNAME} from crontab
     
     -A|--anytime        Set time to any time 
-                        \(clean setted time options\)
+                        (clean setted time options)
     
     
-    --each-minute15     Set minutes to each quarted of hour \(\*/15\)
+    --each-minute15     Set minutes to each quarted of hour (*/15)
     --each-hour3        Set hour to each third hour
     --each-day5         Set days to each fifth day
     --each-month2       Set month to each second month

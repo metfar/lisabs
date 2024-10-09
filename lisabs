@@ -36,7 +36,7 @@ CHANGES=0; #changes counter to know if configuration must be saved
 
 function SaveConfiguration(){
     Where="${Where}/";#adds a final slash
-    Where="`echo -en ${Where}|sed 's/\/\//\/'`"; #Eliminate //
+    Where="`echo -en ${Where}|sed 's/\/\//\//g'`"; #Eliminate //
     cat <<EOF >${CONFFILE}
 #!/bin/cat 
 Temp="${Temp}"
